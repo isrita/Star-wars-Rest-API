@@ -8,8 +8,7 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User
-""" , People """
+from models import db, User, People, FavoritePeople
 #from models import Person
 
 app = Flask(__name__)
@@ -104,6 +103,58 @@ def edit_user():
     db.session.commit()
 
     return jsonify(user.serialize()), 200
+
+@app.route('/add-favorite/people', methods=['POST'])
+def add_favorite_people():
+    body = request.get_json()
+    user_id = body["user_id"]
+    people_id = body["people_id"]
+
+    character = People.query.get(people_id)
+    if not character:
+        raise APIException('Personaje no encontrado', status_code=404)
+
+    user = User.query.get(user_id)
+    if not user:
+        raise APIException('Usuario no encontrado', status_code=404)
+
+    fav_exist = FavoritePeople.query.filter_by(user_id=user.id, people_id = character.id).first() is not None
+
+    if fav_exist:
+        raise APIException('Usuario ya lo tiene agregado a Favoritos', status_code=404)
+
+    favorite_people = FavoritePeople(user_id=user.id, people_id=character.id)
+    db.session.add(favorite_people)
+    db.session.commit()
+
+    return jsonify(favorite_people.serialize()), 201
+
+@app.route('/favorites', methods=['POST'])
+def list_favorites():
+    body = request.get_json()
+    user_id = body["user_id"]
+    if not user_id:
+        raise APIException('Faltan datos', status_code=404)
+
+    user = User.query.get(user_id)
+    if not user:
+        raise APIException('Usuario no encontrado', status_code=404)
+
+    user_favorites = FavoritePeople.query.filter_by(user_id=user.id).all() 
+    user_favorites_final = list(map(lambda item: item.serialize(), user_favorites))
+
+    #user_planets = FavoritePeople.query.filter_by(user_id=user.id).all() 
+    #user_planets_final = list(map(lambda item: item.serialize(), user_favorites))
+
+    
+    #user_favorites_all = user_favorites_final + user_planets_final
+
+    return jsonify(user_favorites_final), 200
+
+    
+
+
+
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
