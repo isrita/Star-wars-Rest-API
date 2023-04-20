@@ -53,3 +53,18 @@ class FavoritePeople (db.Model):
             "user": User.query.get(self.user_id).serialize(),
             "people": People.query.get(self.people_id).serialize(),
         }
+
+    
+class TokenBlockedlist(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    toke = db.Column(db.String(250), unique=True, nullable=False)
+    email = db.Column(db.String(50), unique=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    def serialize(self):
+        return {
+            "id":self.id,
+            "token":self.token,
+            "email":self.email,
+            "created": self.created_at
+                }

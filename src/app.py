@@ -8,11 +8,26 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User, People, FavoritePeople
+from models import db, User, People, FavoritePeople, TokenBlockedlist
 #from models import Person
+
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity, get_jwt
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+ 
+from datetime import date, time, datetime, timezone, timedelta
+
+from flask_bcrypt import Bcrypt #libreria para incriptaciones
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
+
+#Inicio mi instancia de JWL
+app.config["JWT_SECRET_KEY"] = os.getenv("FLASK_APP_KEY")  # Change this!
+jwt = JWTManager(app)
+
+bcrypt = Bcrypt(app) #inicio mi instancia de Bcrypt
 
 db_url = os.getenv("DATABASE_URL")
 if db_url is not None:
@@ -31,7 +46,7 @@ setup_admin(app)
 def handle_invalid_usage(error):
     return jsonify(error.to_dict()), error.status_code
 
-# generate sitemap with all your endpoints
+# generate sitemap with all your endpo s
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
@@ -58,9 +73,11 @@ def register_user():
         raise APIException("You need to specify the request body as json object", status_code=400)
     if "email" not in body:
         raise APIException("You need to specify the email", status_code=400)
+
+    password_encrypted = bcrypt.generate_password_hash(password,10).decode('utf-8')
     
     #creada la clase user en la variable new_user
-    new_user = user(email=email, name=name, password=password, is_active=is_active)
+    new_user = User(email=email, name=name, password=password, is_active=is_active)
 
     db.session.add(new_user) #agregamos el nuevo usuario a la base de datos
     db.session.commit() #luego guardamos los cambios en la base de datos
@@ -151,10 +168,54 @@ def list_favorites():
 
     return jsonify(user_favorites_final), 200
 
+@app.route('/login', methods=['POST'])
+def login():
+    email=request.get_json()["email"]
+    password = request.get_json()["password"]
+
+    user = User.query.filter_by(email=email).first()
+
+    if user is None:
+        return jsonify({"message":"Login failed"}), 401
+
+    #validar el password encriptado
+    if not bcrypt.check_password_hash(user.password, password):
+        return jsonify({"message":"Login failed"}), 401
     
+    access_token = create_access_token(identity=user.id)
+    return jsonify({"token":access_token}), 200
 
 
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    # Access the identity of the current user with get_jwt_identity
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
 
+    token = verificacionToken(get_jwt()["jti"]) #reuso la función de verificacion de token
+    print(token)
+    if token:
+       raise APIException('Token está en lista negra', status_code=404)
+
+    print("EL usuario es: ", user.name)
+    return jsonify({"message":"Estás en una ruta protegida", "name": user.name}), 200
+
+@app.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    jti = get_jwt()["jti"] #identificador de jwt
+    now = datetime.now(timezone.utc)
+
+    #identificamos al usuario
+    current_user = get_jwt_identity()
+    user = User.query.get(current_user)
+
+    tokenblocked = TokenBlockedlist(token=jti, created_at=now, email=user.email)
+    db.session.add(tokenblocked)
+    db.session.commit()
+
+    return jsonify({"message":"logout successfully"})
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
