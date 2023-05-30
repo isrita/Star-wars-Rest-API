@@ -8,26 +8,11 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User, People, FavoritePeople, TokenBlockedList
+from models import db, User, FavoritePeople, People
 #from models import Person
-
-from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt_identity, get_jwt
-from flask_jwt_extended import jwt_required
-from flask_jwt_extended import JWTManager
-
-from datetime import date, time, datetime, timezone, timedelta
-
-from flask_bcrypt import Bcrypt #librería para encriptaciones
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
-
-#inicio de instancia de JWT
-app.config["JWT_SECRET_KEY"] = os.getenv("FLASK_APP_KEY")  # Change this!
-jwt = JWTManager(app)
-
-bcrypt = Bcrypt(app) #inicio mi instancia de Bcrypt
 
 db_url = os.getenv("DATABASE_URL")
 if db_url is not None:
@@ -51,92 +36,169 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-
-def verificacionToken(jti):
-    jti#Identificador del JWT (es más corto)
-    print("jit", jti)
-    token = TokenBlockedList.query.filter_by(token=jti).first()
-
-    if token is None:
-        return False
-    
-    return True
-
 @app.route('/user', methods=['GET'])
 def handle_hello():
-    users = User.query.all()  #<User Antonio>
-    users = list(map(lambda item: item.serialize(), users)) #{name:Antonio, password:123, ....} {name:Usuario2, password:123.... }
+    users = User.query.all()
+    users=list(map(lambda item: item.serialize(), users))
     print(users)
-  
+    response_body = {
+        "msg": "Hello, this is your GET /user response "
+    }
+
     return jsonify(users), 200
 
 @app.route('/register', methods=['POST'])
 def register_user():
-    #recibir el body en json, des-jsonificarlo y almacenarlo en la variable body
-    body = request.get_json() #request.json() pero hay que importar request y json
-
-    #ordernar cada uno de los campos recibidos
-    email = body["email"]
-    name = body["name"]
-    password = body["password"]
-    is_active = body["is_active"]
-
-    #validaciones
+    body=request.get_json()
+    email=body["email"]
+    name=body["name"]
+    password=body["password"]
+    is_active=body["is_active"]
     if body is None:
-        raise APIException("You need to specify the request body as json object", status_code=400)
+        raise APIException("You nned to specify the request body as json object", status_code=400)
     if "email" not in body:
-        raise APIException("You need to specify the email", status_code=400)
+        raise APIException("specify the email", status_code=400)
+    if 'name' not in body:
+        raise APIException('specify the name', status_code=400)
+    if 'password' not in body:
+        raise APIException('You need to specify the password', status_code=400)
+    new_user=User(email=email, name=name, password=password, is_active=is_active)
+    db.session.add(new_user)
+    db.session.commit()
+      
+    return jsonify({"mensaje":"Usuario creado"}), 201
 
-    password_encrypted = bcrypt.generate_password_hash(password,10).decode("utf-8")
+@app.route('/get_user/<int:id>', methods=['GET'])
+def get_specify_user(id):
+    user = User.query.get(id)
 
-    #creada la clase User en la variable new_user
-    new_user = User(email=email, name=name, password=password_encrypted, is_active=is_active)
-
-    #comitear la sesión
-    db.session.add(new_user) #agregamos el nuevo usuario a la base de datos
-    db.session.commit() #guardamos los cambios en la base de datos
-
-    return jsonify({"mensaje":"Usuario creado correctamente"}), 201 
-
-@app.route('/get-user/<int:id>', methods=['GET'])
-def get_specific_user(id):
-    user = User.query.get(id)    
-  
     return jsonify(user.serialize()), 200
 
-@app.route('/get-user', methods=['POST'])
-def get_specific_user2():
-    body = request.get_json()   
+@app.route('/get_user', methods=['POST'])
+def get_specify_user2():
+    body = request.get_json()
     id = body["id"]
-
-    user = User.query.get(id)   
-  
+    user = User.query.get(id)
     return jsonify(user.serialize()), 200
 
-@app.route('/get-user', methods=['DELETE'])
-def delete_specific_user():
-    body = request.get_json()   
+@app.route('/get_user', methods=['DELETE'])
+def delete_specify_user():
+    body = request.get_json()
     id = body["id"]
-
-    user = User.query.get(id) 
-
+    user = User.query.get(id)
     db.session.delete(user)
-    db.session.commit()  
-  
-    return jsonify("Usuario borrado"), 200
+    db.session.commit()
+    return jsonify("Usuario eliminado"), 200
 
-@app.route('/get-user', methods=['PUT'])
-def edit_user():
-    body = request.get_json()   
+@app.route('/get_user', methods=['PUT'])
+def edit_specify_user():
+    body = request.get_json()
     id = body["id"]
-    name = body["name"]
-
-    user = User.query.get(id)   
-    user.name = name #modifique el nombre del usuario
+    name=body["name"]
+    user = User.query.get(id)
+    user.name=name
 
     db.session.commit()
-  
     return jsonify(user.serialize()), 200
+
+@app.route('/get_people/<int:id>', methods=['GET'])
+def get_specify_people(id):
+    people = People.query.get(id)
+
+    return jsonify(people.serialize()), 200
+
+@app.route('/get_people', methods=['POST'])
+def get_specify_people2():
+    body = request.get_json()
+    id = body["id"]
+    people = People.query.get(id)
+    return jsonify(people.serialize()), 200
+
+@app.route('/get_people', methods=['DELETE'])
+def delete_specify_people():
+    body = request.get_json()
+    id = body["id"]
+    people = People.query.get(id)
+    db.session.delete(people)
+    db.session.commit()
+    return jsonify("Personaje eliminado"), 200
+
+@app.route('/get_people', methods=['PUT'])
+def edit_specify_people():
+    body = request.get_json()
+    id = body["id"]
+    name=body["name"]
+    people = People.query.get(id)
+    people.name=name
+
+    db.session.commit()
+    return jsonify(people.serialize()), 200
+
+@app.route('/get_planet/<int:id>', methods=['GET'])
+def get_specify_planet(id):
+    planet = Planet.query.get(id)
+
+    return jsonify(planet.serialize()), 200
+
+@app.route('/get_planet', methods=['POST'])
+def get_specify_planet2():
+    body = request.get_json()
+    id = body["id"]
+    planet = Planet.query.get(id)
+    return jsonify(planet.serialize()), 200
+
+@app.route('/get_planet', methods=['DELETE'])
+def delete_specify_planet():
+    body = request.get_json()
+    id = body["id"]
+    planet = Planet.query.get(id)
+    db.session.delete(planet)
+    db.session.commit()
+    return jsonify("Planeta eliminado"), 200
+
+@app.route('/get_planet', methods=['PUT'])
+def edit_specify_planet():
+    body = request.get_json()
+    id = body["id"]
+    name=body["name"]
+    planet = Planet.query.get(id)
+    planet.name=name
+
+    db.session.commit()
+    return jsonify(planet.serialize()), 200
+
+@app.route('/get_vehicle/<int:id>', methods=['GET'])
+def get_specify_vehicle(id):
+    vehicle = Vehicle.query.get(id)
+
+    return jsonify(vehicle.serialize()), 200
+
+@app.route('/get_vehicle', methods=['POST'])
+def get_specify_vehicle2():
+    body = request.get_json()
+    id = body["id"]
+    vehicle = Vehicle.query.get(id)
+    return jsonify(vehicle.serialize()), 200
+
+@app.route('/get_vehicle', methods=['DELETE'])
+def delete_specify_vehicle():
+    body = request.get_json()
+    id = body["id"]
+    vehicle = Vehicle.query.get(id)
+    db.session.delete(vehicle)
+    db.session.commit()
+    return jsonify("Vehiculo eliminado"), 200
+
+@app.route('/get_vehicle', methods=['PUT'])
+def edit_specify_vehicle():
+    body = request.get_json()
+    id = body["id"]
+    name=body["name"]
+    vehicle = Vehicle.query.get(id)
+    vehicle.name=name
+
+    db.session.commit()
+    return jsonify(vehicle.serialize()), 200
 
 @app.route('/add-favorite/people', methods=['POST'])
 def add_favorite_people():
@@ -144,99 +206,92 @@ def add_favorite_people():
     user_id = body["user_id"]
     people_id = body["people_id"]
 
-    character = People.query.get(people_id)
+    character = People.query.get(people.id)
     if not character:
-        raise APIException('personaje no encontrado', status_code=404)
-    
-    user = User.query.get(user_id)
+        raise APIException("personaje no encontrado", status_code=404)
+
+    user = user.query.get(user_id).first()
     if not user:
-        raise APIException('usuario no encontrado', status_code=404)
+        raise APIException("usuario no encontrado", status_code=404)
 
-    fav_exist = FavoritePeople.query.filter_by(user_id = user.id, people_id = character.id).first() is not None
+    fav_exist = FavoritePeople.query.filter_by(user_id=user.id, people_id=character.id).first() is not None
+    if not fav_exist:
+        raise APIException("El usuario ya lo tiene agregado a favoritos", status_code=404)
     
-    if fav_exist:
-        raise APIException('el usuario ya lo tiene agregado a favoritos', status_code=404)
-
     favorite_people = FavoritePeople(user_id=user.id, people_id=character.id)
     db.session.add(favorite_people)
     db.session.commit()
 
-    return jsonify(favorite_people.serialize()), 201
+    return jsonify(favorite_people.serialize()), 200
 
-
-@app.route('/favorites', methods=['POST'])
-def list_favorites():
+@app.route('/add-favorite/planet', methods=['POST'])
+def add_favorite_planet():
     body = request.get_json()
     user_id = body["user_id"]
-    if not user_id:
-        raise APIException('faltan datos', status_code=404)
+    planet_id = body["people_id"]
+
+    planet = Planet.query.get(planet.id)
+    if not character:
+        raise APIException("Planeta no encontrado", status_code=404)
+
+    user = user.query.get(user_id).first()
+    if not user:
+        raise APIException("usuario no encontrado", status_code=404)
+
+    fav_exist = FavoritePlanet.query.filter_by(user_id=user.id, planet_id=planet.id).first() is not None
+    if not fav_exist:
+        raise APIException("El usuario ya lo tiene agregado a favoritos", status_code=404)
+    
+    favorite_planet = FavoritePlanet(user_id=user.id, people_id=character.id)
+    db.session.add(favorite_planet)
+    db.session.commit()
+
+    return jsonify(favorite_people.serialize()), 200
+
+
+@app.route('/add-favorite/vehicle', methods=['POST'])
+def add_favorite_vehicle():
+    body = request.get_json()
+    user_id = body['user_id']
+    vehicle_id = body['vehicle_id']
+
+    vehicle = Vehicle.query.get(vehicle_id) 
+    raise APIException('Vehiculo no encontrado', status_code=404)
     
     user = User.query.get(user_id)
     if not user:
         raise APIException('usuario no encontrado', status_code=404)
 
-    user_favorites = FavoritePeople.query.filter_by(user_id=user.id).all()    
-    user_favorites_final = list(map(lambda item: item.serialize(), user_favorites))
-
-    #user_favorites_planets = FavoritePlanets.query.filter_by(user_id=user.id).all()
-    #user_favorites_final_planets = list(map(lambda item: item.serialize(), user_favorites_planets))
-
-
-    #user_favorites_final = user_favorites_final + user_favorites_final_planets + user_favorites_final_vehicles
-
-    return jsonify(user_favorites_final), 200
-
-@app.route('/login', methods=['POST'])
-def login():
-    email=request.get_json()["email"]
-    password = request.get_json()["password"]
-
-    user = User.query.filter_by(email=email).first()
-
-    if user is None:
-        return jsonify({"message":"Login failed"}), 401
+    favorite_exist = FavoriteVehicle.query.filter_by(user_id = user.id, vehicle_id = vehicle.id).first() is not None
     
-    """ if password != user.password:
-        return jsonify({"message":"Login failed"}), 401 """
+    if favorite_exist:
+        raise APIException('El usuario ya lo tiene agregado a favoritos', status_code=404)
 
-    #validar el password encriptado
-    if not bcrypt.check_password_hash(user.password, password):
-        return jsonify({"message":"Login failed"}), 401
-    
-    access_token = create_access_token(identity=user.id)
-    return jsonify({"token":access_token}), 200
-
-@app.route("/protected", methods=["GET"])
-@jwt_required()
-def protected():
-    # Access the identity of the current user with get_jwt_identity
-    current_user = get_jwt_identity()
-    user = User.query.get(current_user)
-
-    token = verificacionToken(get_jwt()["jti"]) #reuso la función de verificacion de token
-    print(token)
-    if token:
-       raise APIException('Token está en lista negra', status_code=404)
-
-    print("EL usuario es: ", user.name)
-    return jsonify({"message":"Estás en una ruta protegida", "name": user.name}), 200
-
-@app.route("/logout", methods=["GET"])
-@jwt_required()
-def logout():
-    jti = get_jwt()["jti"] #Identificador del JWT (es más corto)
-    now = datetime.now(timezone.utc) 
-
-    #identificamos al usuario
-    current_user = get_jwt_identity()
-    user = User.query.get(current_user)
-
-    tokenBlocked = TokenBlockedList(token=jti , created_at=now, email=user.email)
-    db.session.add(tokenBlocked)
+    favorite_vehicle = FavoriteVehicle(user_id = user.id, vehicle_id = vehicle.id)
+    db.session.add(favorite_vehicle)
     db.session.commit()
 
-    return jsonify({"message":"logout successfully"})
+    return jsonify(favorite_vehicle.serialize()), 200
 
+@app.route('/favorites', methods=['POST'])
+def list_Favorites():
+    body = request.get_json()
+    user_id = body["user_id"]
+    if not user_id:
+        raise APIException("Faltan datos", status_code=404)
+
+    user= User.query.get(user_id)
+    if not user:
+        raise APIException("usuario no encontrado", status_code=404)
+
+    user_favorites_people = FavoritePeople.query.filter_by(user_id=user.id).all()
+    user_favorites_final_people = list(map(lambda item: item.serialize(), user_favorites_people))
+    user_favorites_planet = FavoritePlanet.query.filter_by(user_id=user.id).all()
+    user_favorites_final_planet = list(map(lambda item: item.serialize(), user_favorites_planet))
+    user_favorites_vehicle = FavoriteVehicle.query.filter_by(user_id=user.id).all()
+    user_favorites_final_vehicle = list(map(lambda item: item.serialize(), user_favorites_vehicle))
+
+    return jsonify(user_favorites_final_people, user_favorites_final_planet, user_favorites_final_vehicle), 200
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
